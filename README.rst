@@ -91,7 +91,14 @@ Install fasttext
   !pip install -q cython
   !pip install -q fasttext
 
+  
+Imagemagick
 
+::
+
+   !apt-get install imagemagick
+
+   
 Random Notes
 ------------
 
@@ -138,3 +145,12 @@ Add this at end of the notebook to get a notification that it is finished
   import IPython
   IPython.display.Audio("done.wav",autoplay=True)
 
+
+Imagemagick
+-----------
+
+Resize to 50%
+!convert  -resize 50% a.jpg b.jpg
+
+Convert to grayscale
+!convert <img_in> -set colorspace Gray -separate -average <img_out>
