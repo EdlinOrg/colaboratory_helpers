@@ -6,6 +6,9 @@ class MyFastTexter():
     """
     This one is for the version installed via
     https://github.com/facebookresearch/fastText
+
+    Re multi-label
+    https://github.com/facebookresearch/fastText/issues/478
     """
 
     def setDataFile(self, trainfile):
@@ -42,6 +45,7 @@ class MyFastTexter():
     def predictprobs(self, mystr):
         label = self.classifier.predict(mystr.strip(), k=2)
 
+        #TODO: this one just gives back two, probably change to be the same as number of labels, and in order
         res =  {}
         one = label[0][0].strip("__label__")
         res[one] = label[1][0]
@@ -57,13 +61,14 @@ class MyFastTexter():
     def predictscore(self, mystr):
         label = self.classifier.predict(mystr.strip())
 
-        #the bloody label contains __label__ for some reason, so we strip it
-        res = label[0][0].strip("__label__")
+        #the bloody label contains __label__ for some reason, so we remove it
+        res = label[0][0].replace("__label__", '')
         return (res, label[1][0])
 
     def predictArray(self, myarr):
         res=[]
         for entry in myarr:
+
             res.append(self.predict(entry))
         return res
 
@@ -82,9 +87,7 @@ class MyFastTexter():
         else:
             self.createDictFromTrainfile()
 
-        #lrs = [3.0,2.5,2.0, 1.5, 1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
-        lrs = [1.3, 1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
-        #ngrams = [1, 2, 3]
+        lrs = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
         ngrams = [2, 3, 1]
         minn = [0, 1, 2, 3]
         minCounts = [4, 3, 2, 1] #default is 1
@@ -93,7 +96,6 @@ class MyFastTexter():
             ignoreUntilStart=True
         else:
             ignoreUntilStart=False
-
 
         bestsofar = []
         bestmodelfile = ""
@@ -149,7 +151,7 @@ class MyFastTexter():
         self.createDictFromTrainfile()
         self.evaluateOnly()
 
-    def evaluateOnly(self):
+    def evaluateOnlyOld(self):
 
         poslabels = self.predictArray(self.prepdict['pos'])
         #print(poslabels)
@@ -162,8 +164,50 @@ class MyFastTexter():
 
         self.printStats(self.tp, self.fn, self.tn, self.fp)
 
+    def evaluateOnly(self):
+        print("evaluateOnly")
+        self.tp = 0
+        self.fn = 0
+        self.fp = 0
+        self.tn = 0
+
+        for label in self.prepdict.keys():
+
+            tp=0
+            fn=0
+            fp=0
+            tn=0
+
+            poslabels = self.predictArray(self.prepdict[label])
+
+            #print("Poslabels:")
+            #print(poslabels)
+
+            tp += poslabels.count(label)
+            fn += len(poslabels) - poslabels.count(label)
+
+            #for all other labels, check for false positives
+            for otherlabel in self.prepdict.keys():
+                if otherlabel == label:
+                    continue
+
+                olbl = self.predictArray(self.prepdict[otherlabel])
+                fp += olbl.count(label)
+                tn += len(olbl) - olbl.count(label)
+
+            print("= " * 80)
+            print("Stats for label {}".format(label))
+            self.printStats(tp, fn, tn, fp)
+
+            self.tp += tp
+            self.fn += fn
+            self.fp += fp
+            self.tn += tn
+
+        self.printStats(self.tp, self.fn, self.tn, self.fp)
 
     def printStats(self, tp, fn, tn, fp):
+        print("printStats")
         result = self.classifier.test(self.trainfile)
         print(result)
 #        print('P@1:', result.precision)
