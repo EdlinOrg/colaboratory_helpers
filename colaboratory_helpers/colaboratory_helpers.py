@@ -248,8 +248,12 @@ def splitCSV(inputfile, outputdir, trainRatio=0.85):
     df1 = df.iloc[:trainSize,]
     df2 = df.iloc[trainSize:]
 
-    df1.to_csv(outputdir + "/" + inputfile + ".train", index=False)
-    df2.to_csv(outputdir + "/" + inputfile + ".test", index=False)
+    filename=outputdir + "/" + inputfile + ".train"
+    print("Saving {}".format(filename))
+    df1.to_csv(filename, index=False)
+    filename=outputdir + "/" + inputfile + ".test"
+    print("Saving {}".format(filename))
+    df2.to_csv(filename, index=False)
 
 # ######### DATA SPLITTING #########
 
