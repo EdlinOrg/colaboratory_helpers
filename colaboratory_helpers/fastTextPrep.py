@@ -162,6 +162,7 @@ def createTrainingFile(inputdict,
     fh.close()
 
     if pkoutfile is not None:
+        print("Saving to pkl file {}".format(pkoutfile))
         pickle.dump(pkdict, open( pkoutfile, "wb" ))
         fh.close()
 
