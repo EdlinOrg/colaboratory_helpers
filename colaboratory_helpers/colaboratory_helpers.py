@@ -5,6 +5,7 @@ from pydrive.drive import GoogleDrive
 from google.colab import auth
 from oauth2client.client import GoogleCredentials
 
+import hashlib
 import os
 import random
 import time
@@ -173,6 +174,15 @@ def createSetFromCVSs(csvs):
     df.drop_duplicates(subset='Filename', keep="first", inplace=True)
     return set(df.Filename.astype(str).str.strip().unique())
 
+def createFilesIfNotExist(filenames):
+    """
+    Will create a empty file if the file doesn't exist
+    :param filenames: list of filenames
+    """
+    for filename in filenames:
+        if not os.path.isfile(filename):
+            print("File didn't exist, will create empty one {}".format(filename))
+            open(filename, 'a').close()
 
 def numFilesInDir(source):
   return len(os.listdir(source))
@@ -181,51 +191,97 @@ def createCSVwithFilesInDir(indir, filename):
     files = os.listdir(indir)
     dumpArrToFile(filename, files)
 
+def fetchWithCache(url, cachedir="webcache"):
+  if not os.path.isdir(cachedir):
+    os.makedirs(cachedir)
+
+  hash = hashlib.md5(url.encode('utf-8')).hexdigest()
+  __, file_extension = os.path.splitext(url)
+
+  filename = cachedir + "/" + hash + "." + file_extension
+
+  if os.path.isfile(filename):
+    return filename
+
+  with urllib.request.urlopen(url) as response, open(filename, 'wb') as out_file:
+    shutil.copyfileobj(response, out_file)
+  return filename
+
 def fetch(url, filename):
-#  !wget {url} -O {filename}
   with urllib.request.urlopen(url) as response, open(filename, 'wb') as out_file:
     shutil.copyfileobj(response, out_file)
 
 
 # ######### DATA MODIFICATION ########
 
-
-def modifyCsv(inputfile, outputfile, pkfield, removefile=None, moveinfofile=None, filestomovefrom=None):
+def modifyCsv(inputfile, outputfile, pkfield, removefiles=None, moveinfofile=None, filestomovefrom=None):
     """
     Loads the CSV file, and modify it and save as outputfile
     :param inputfile: CSV in (with header)
     :param outputfile: CSV out
     :param pkfield: the header that is the primary key
-    :param removefile: a file with primary keys on each line to remove (no header)
+    :param removefiles: a list of files with primary keys on each line to remove (no header)
     :param moveinfofile: file with primary keys we want to move here (no header)
-    :param filestomovefrom: list of filenames, each file has the same format as the inputfile
+    :param filestomovefrom: list of filenames, each file has the same format as the inputfile,
+    this is the meta data that we will copy over using the entries in moveinfofile
+    if the same name as inputfile is in the list, it will be ignored
     """
 
     print("Loading inputfile {}".format(inputfile))
     df = pd.read_csv(inputfile)
 
-    if removefile is not None:
-        print("Loading fields to remove {}".format(removefile))
-        dfRemove = pd.read_csv(removefile, header=None, names=['PK'])
+    print(">>>Real size of inputfile before modifying {}".format(df.shape[0]))
 
-        for index, row in dfRemove.iterrows():
-            print("Removing {}".format(row['PK']))
+    #we need to remove items that are in this file, but also are in files to be moved to other files
+    #so we need to change removefile to be an array, and pass them in there
 
-            df = df[df[pkfield] != row['PK']]
+    if removefiles is not None:
+        for removefile in removefiles:
+            print("Loading fields to remove from file {}".format(removefile))
+            if removefile == moveinfofile:
+                print("Ignoring this file since its the same as the moveinfofile")
+                continue
 
+            dfRemove = pd.read_csv(removefile, header=None, names=['PK'])
+
+            for index, row in dfRemove.iterrows():
+                print("Removing {} (if it is present)".format(row['PK']))
+
+                df = df[df[pkfield] != row['PK']]
 
     if moveinfofile is not None:
-        print("Loading fields to move {}".format(moveinfofile))
+        print("Loading fields to move, these are the PK that shall be moved from other files to this one {}".format(moveinfofile))
+
         dfMove = pd.read_csv(moveinfofile, header=None, names=['PK'])
 
         for movefile in filestomovefrom:
-            print("Loading raw data to move {}".format(movefile))
-            dfRaw = pd.read_csv(movefile)
+            print("Loading raw data for other files we want to move from {}".format(movefile))
+
+            if movefile == inputfile:
+                print("Ignoring this file since its the same as the inputfile")
+                continue
+
+            cntAdded=0
+            try:
+                dfRaw = pd.read_csv(movefile)
+            except pd.errors.EmptyDataError:
+                print("File was empty")
+                continue
 
             for index, row in dfMove.iterrows():
-                print("adding {}".format(row['PK']))
+                #print("Will try adding {}".format(row['PK']))
+                tmpdf = dfRaw[ dfRaw[pkfield] == row['PK']]
+                if tmpdf.empty:
+                    #print("...not found here")
+                    pass
+                else:
+                    cntAdded = 1
+                    print("adding {}".format(row['PK']))
+                    df = df.append(tmpdf, ignore_index=True)
 
-                df = df.append(dfRaw[ dfRaw[pkfield] == row['PK']], ignore_index=True)
+            print("Added {} entries from {}".format(cntAdded, movefile))
+
+    print("<<<Real size of inputfile after modifying {}".format(df.shape[0]))
 
     df.to_csv(outputfile, index=False)
 
@@ -240,6 +296,8 @@ def splitCSV(inputfile, outputdir, trainRatio=0.85):
     print("Loading inputfile {}".format(inputfile))
     df = pd.read_csv(inputfile)
 
+    print("Real size of input: {}".format(df.shape[0]))
+
     trainSize = int(len(df.index) * trainRatio)
 
     #randomize the df
@@ -248,9 +306,13 @@ def splitCSV(inputfile, outputdir, trainRatio=0.85):
     df1 = df.iloc[:trainSize,]
     df2 = df.iloc[trainSize:]
 
+    print("Real size of training: {}".format(df1.shape[0]))
+    print("Real size of test: {}".format(df2.shape[0]))
+
     filename=outputdir + "/" + inputfile + ".train"
     print("Saving {}".format(filename))
     df1.to_csv(filename, index=False)
+
     filename=outputdir + "/" + inputfile + ".test"
     print("Saving {}".format(filename))
     df2.to_csv(filename, index=False)
