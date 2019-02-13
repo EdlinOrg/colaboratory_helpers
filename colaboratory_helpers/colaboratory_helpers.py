@@ -214,7 +214,14 @@ def fetch(url, filename):
 
 # ######### DATA MODIFICATION ########
 
-def modifyCsv(inputfile, outputfile, pkfield, removefiles=None, moveinfofile=None, filestomovefrom=None):
+def modifyCsv(inputfile,
+              outputfile,
+              pkfield,
+              removefiles=None,
+              moveinfofile=None,
+              filestomovefrom=None,
+              killwords=None
+              ):
     """
     Loads the CSV file, and modify it and save as outputfile
     :param inputfile: CSV in (with header)
@@ -225,6 +232,8 @@ def modifyCsv(inputfile, outputfile, pkfield, removefiles=None, moveinfofile=Non
     :param filestomovefrom: list of filenames, each file has the same format as the inputfile,
     this is the meta data that we will copy over using the entries in moveinfofile
     if the same name as inputfile is in the list, it will be ignored
+    :param killwords a list of strings. Any rows where any column partially match any of these strings,
+    will be removed. Note: this removal takes place before the moveinfofile is processed.
     """
 
     print("Loading inputfile {}".format(inputfile))
@@ -245,9 +254,19 @@ def modifyCsv(inputfile, outputfile, pkfield, removefiles=None, moveinfofile=Non
             dfRemove = pd.read_csv(removefile, header=None, names=['PK'])
 
             for index, row in dfRemove.iterrows():
-                print("Removing {} (if it is present)".format(row['PK']))
+                #print("Removing {} (if it is present)".format(row['PK']))
 
                 df = df[df[pkfield] != row['PK']]
+
+    if killwords is not None:
+        print("Will use killwords")
+        print(killwords)
+        print("Size before killwords {}".format(df.shape[0]))
+        for killword in killwords:
+            for col in df.loc[:, df.dtypes == object].columns:
+                df = df[~df[col].str.contains(killword, na=False)]
+        print("Size after killwords {}".format(df.shape[0]))
+
 
     if moveinfofile is not None:
         print("Loading fields to move, these are the PK that shall be moved from other files to this one {}".format(moveinfofile))
@@ -276,7 +295,7 @@ def modifyCsv(inputfile, outputfile, pkfield, removefiles=None, moveinfofile=Non
                     pass
                 else:
                     cntAdded = 1
-                    print("adding {}".format(row['PK']))
+                    #print("adding {}".format(row['PK']))
                     df = df.append(tmpdf, ignore_index=True)
 
             print("Added {} entries from {}".format(cntAdded, movefile))
