@@ -104,6 +104,46 @@ def allCheckboxes(pk):
 
     return myhtml
 
+
+def anyTextToColor(mystr):
+    """
+    Converts s string to a hex color
+    :param mystr: any string
+    :return: for example "a0c73a"
+    """
+
+    if len(mystr) < 3:
+        # pad up with zeros
+        while len(mystr) % 3 != 0:
+            mystr += "0"
+
+    i = 0
+    sum1 = 0
+    sum2 = 0
+    sum3 = 0
+    for c in mystr:
+        if i % 3 == 0:
+            sum1 += int( str(ord(c)) + str(i)[::-1])
+        if i % 3 == 1:
+            sum2 += int(str(ord(c)) + str(i)[::-1])
+        if i % 3 == 2:
+            sum3 += int(str(ord(c)) + str(i)[::-1])
+        i += 1
+
+    x1 = sum1 % 255
+    x2 = sum2 % 255
+    x3 = sum3 % 255
+
+    #actually, lets go for shades of green
+    x2 = 255
+
+    outstr = "%x%x%x" % (x1, x2, x3)
+
+    while len(outstr) < 6:
+        outstr += "a"
+
+    return outstr
+
 def init(moveLabels={}):
     """
     :param moveLabels: make sure it is a collections.OrderedDict()
@@ -119,7 +159,9 @@ def init(moveLabels={}):
     cssCode = css(removeClass, '#F00')
 
     for lbl, __ in uiMoveLables.items():
-        cssCode += css(moveClass + lbl, "#090")
+        #cssCode += css(moveClass + lbl, "#090")
+        mecolor = anyTextToColor(lbl)
+        cssCode += css(moveClass + lbl, "#" + mecolor)
 
     return cssCode
 
@@ -131,7 +173,6 @@ def cbTriggered(value):
     """
     global selectedCheckboxes
     selectedCheckboxes=value
-
 
 def getMoverAsArray(labelName):
     """
