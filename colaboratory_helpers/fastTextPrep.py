@@ -12,6 +12,7 @@ def createTrainingFile(inputdict,
                        cleanupCSVLabels=[],
                        pkfield=None,
                        pkoutfile=None,
+                       pkoutfilelabel=None,
                        modifyCSVentries=True,
                        duplicators=None,
                        beBrutal=False,
@@ -23,6 +24,8 @@ def createTrainingFile(inputdict,
     :param inputdict: filename -> label
     :param headersToUse: array of strings
     :param filterset: only process these keys
+    :param pkoutfile: File to save pk -> string info
+    :param pkoutfilelabel: File to save pk -> label
     :param additionalPklinfo: dict:
                                 filename -> str|array of str
                                 wantedLabels -> None|array of str
@@ -72,11 +75,9 @@ def createTrainingFile(inputdict,
     # pkey -> string
     pkdict = {}
 
+    pk2label = {}
+
     prepdict={}
-
-    #TODO: Save a sample of each in here to print out at the end
-    #samples = {}
-
 
     for cvsfilenameWitHeader, label in inputdict.items():
 
@@ -147,6 +148,7 @@ def createTrainingFile(inputdict,
 
             if pkfield is not None:
                 pkdict[row[pkfield]] = mystr
+                pk2label[row[pkfield]] = label
 
             mystr = '__label__' + label + ' ' + mystr
 
@@ -164,6 +166,11 @@ def createTrainingFile(inputdict,
     if pkoutfile is not None:
         print("Saving to pkl file {}".format(pkoutfile))
         pickle.dump(pkdict, open( pkoutfile, "wb" ))
+        fh.close()
+
+    if pkoutfilelabel is not None:
+        print("Saving to pk2label file {}".format(pkoutfilelabel))
+        pickle.dump(pk2label, open(pkoutfilelabel, "wb"))
         fh.close()
 
     return prepdict
