@@ -16,7 +16,8 @@ def createTrainingFile(inputdict,
                        modifyCSVentries=True,
                        duplicators=None,
                        beBrutal=False,
-                       additionalPklinfo=None):
+                       additionalPklinfo=None,
+                       stopwordsfile=None):
     """
     Loads the cvs file (with first line being header),
     only uses the headers specified in headersToUse
@@ -30,13 +31,13 @@ def createTrainingFile(inputdict,
                                 filename -> str|array of str
                                 wantedLabels -> None|array of str
                                 strategy -> 1=RAW|2=DIGIT2LETTERS  TODO: is this one necessary?
+    :param stopwordsfile: path to file which contain stop words (newline separated)
     :return:
     """
 
     if filterset is not None and pkfield is None:
         print("Error: you must define pkfield to be the header with the pk")
         return
-
 
     if filterset is not None:
         print("Number of items in filterset {}".format(len(filterset)))
@@ -69,6 +70,14 @@ def createTrainingFile(inputdict,
 #        print("Keys in dict {}".format(addInfoDict.keys()))
 
         addInfoEntries= additionalPklinfo['wantedLabels']
+
+    stopwordsdict=None
+    if stopwordsfile is not None:
+        stopwordsdict = {}
+        with open(stopwordsfile) as f:
+            for line in f:
+                stopwordsdict[line.strip()] = True
+
 
     fh = open(outfile, "w")
 
@@ -142,7 +151,7 @@ def createTrainingFile(inputdict,
                     mystr += tmpjson
 
             if beBrutal:
-                mystr = brutal(mystr)
+                mystr = brutal(mystr, stopwordsdict=stopwordsdict)
             else:
                 mystr = cleanStr(mystr)
 
@@ -220,7 +229,7 @@ def parseDict(myDict, wantedEntries):
     return tmp
 
 
-def brutal(mystr, withNumbers=True):
+def brutal(mystr, withNumbers=True, stopwordsdict=None):
     """
     Lowercase, remove any none a-z chars
     :param mystr:
@@ -233,7 +242,28 @@ def brutal(mystr, withNumbers=True):
         regExpr = '[^a-z]'
 
     mystr = re.sub(regExpr, ' ', mystr.lower())
-    mystr = re.sub(' +', ' ', mystr)
+    mystr = re.sub(' +', ' ', mystr).strip()
+
+
+    myl = mystr.split()
+
+    mystr=''
+    for word in myl:
+        #ignore any one charater words
+        if len(word) > 1:
+
+            #ignore if just digits
+            if word.isdigit():
+                continue
+
+            #ignore any words in the stop words dict
+            if stopwordsdict is not None and word in stopwordsdict:
+                continue
+
+            if mystr != '':
+                mystr += ' '
+            mystr += word
+
     return mystr
 
 
