@@ -16,6 +16,7 @@ def createTrainingFile(inputdict,
                        modifyCSVentries=True,
                        duplicators=None,
                        beBrutal=False,
+                       cbpreprocess=None,
                        additionalPklinfo=None,
                        stopwordsfile=None):
     """
@@ -27,6 +28,7 @@ def createTrainingFile(inputdict,
     :param filterset: only process these keys
     :param pkoutfile: File to save pk -> string info
     :param pkoutfilelabel: File to save pk -> label
+    :param cbpreprocess: call back function to preprocess our data string
     :param additionalPklinfo: dict:
                                 filename -> str|array of str
                                 wantedLabels -> None|array of str
@@ -149,6 +151,10 @@ def createTrainingFile(inputdict,
 #                    if tmpjson != '':
 #                        print("nexeif {}".format(row[pkfield]))
                     mystr += tmpjson
+
+
+            if cbpreprocess is not None:
+                mystr = cbpreprocess(mystr)
 
             if beBrutal:
                 mystr = brutal(mystr, stopwordsdict=stopwordsdict)
