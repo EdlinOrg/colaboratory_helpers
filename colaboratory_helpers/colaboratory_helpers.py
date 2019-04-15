@@ -22,7 +22,6 @@ import matplotlib.pyplot as plt
 
 import cv2
 
-
 from sklearn.metrics import confusion_matrix, recall_score, f1_score, precision_score, accuracy_score
 
 import matplotlib.pyplot as plt
@@ -220,7 +219,10 @@ def modifyCsv(inputfile,
               removefiles=None,
               moveinfofile=None,
               filestomovefrom=None,
-              killwords=None
+              killwords=None,
+              multi_label=False,
+              multi_label_correctiondir=None,
+              multi_label_field=None
               ):
     """
     Loads the CSV file, and modify it and save as outputfile
@@ -234,6 +236,10 @@ def modifyCsv(inputfile,
     if the same name as inputfile is in the list, it will be ignored
     :param killwords a list of strings. Any rows where any column partially match any of these strings,
     will be removed. Note: this removal takes place before the moveinfofile is processed.
+    :param multi_label: boolean if its multi label or not
+    :param multi_label_correctiondir: full path to directory with files of the name <label>.csv and <label>.remove.csv containing only PK
+        these files are used to determine labels for each pk.
+    :param multi_label_field: the name of the field in inputfile that contains the labels (assumed the rows will contain a comma separated string of labels)
     """
 
     print("Loading inputfile {}".format(inputfile))
@@ -290,15 +296,85 @@ def modifyCsv(inputfile,
             for index, row in dfMove.iterrows():
                 #print("Will try adding {}".format(row['PK']))
                 tmpdf = dfRaw[ dfRaw[pkfield] == row['PK']]
-                if tmpdf.empty:
-                    #print("...not found here")
-                    pass
-                else:
-                    cntAdded = 1
+                if not tmpdf.empty:
+                    cntAdded += 1
                     #print("adding {}".format(row['PK']))
                     df = df.append(tmpdf, ignore_index=True)
 
             print("Added {} entries from {}".format(cntAdded, movefile))
+
+    if multi_label:
+        print("Processing multi label")
+        #for each remove file, also load corresponding add file.
+        #if the same PK is in both files, it is assumed the PK should be removed.
+
+        processedfiles={}
+
+        for fn in os.listdir(multi_label_correctiondir):
+            filename = multi_label_correctiondir + '/' + fn
+            if os.path.isfile(filename) and fn.endswith('.remove.csv'):
+                processedfiles[fn] = True
+                #extract label from filename
+                label = fn.split(".remove.csv")[0]
+
+                print("Loading remove file {}, label {}".format(fn, label))
+                dfRemove = pd.read_csv(filename, header=None, names=['PK'])
+
+                for __, row in dfRemove.iterrows():
+                    #remove the label from the label field multi_label_field
+                    print("Attempt to remove {}".format(row['PK']))
+                    tmpdf = df[ df[pkfield] == row['PK']]
+                    if tmpdf.empty:
+                        print("Remove failed: Could not find an entry with PK {}".format(row['PK']))
+                    else:
+                        labels = tmpdf[multi_label_field].get_values()[0].split(',')
+                        if label in labels:
+                            labels.remove(label)
+                            df.loc[ df[pkfield] == row['PK'], multi_label_field] = ",".join(labels)
+
+                #LOAD ADD FILE AND DONT PROCESS ANY FROM REMOVE PK IN that one
+                fn = label + ".csv"
+                filename = multi_label_correctiondir + '/' + fn
+                if os.path.isfile(filename):
+                    processedfiles[fn] = True
+                    print("Loading corresponding add file {}, label {}".format(fn, label))
+                    dfAdd = pd.read_csv(filename, header=None, names=['PK'])
+                    for __, row in dfAdd.iterrows():
+                        tmpdf = dfRemove[ dfRemove['PK'] == row['PK']]
+
+                        if tmpdf.empty:
+                            #Not found in remove file, that means we can add it, otherwise we ignore it
+                            print("Attempt to add {}".format(row['PK']))
+                            tmpdf = df[ df[pkfield] == row['PK']]
+
+                            if tmpdf.empty:
+                                print("Add failed: Could not find an entry with PK {}".format(row['PK']))
+                            else:
+                                labels = tmpdf[multi_label_field].get_values()[0].split(',')
+                                if label not in labels:
+                                    labels.append(label)
+                                    df.loc[ df[pkfield] == row['PK'], multi_label_field] = ",".join(labels)
+
+        # Now process any add files that didnt have remove files
+        for fn in os.listdir(multi_label_correctiondir):
+            filename = multi_label_correctiondir + '/' + fn
+            if os.path.isfile(filename) and fn.endswith('.csv'):
+                label = fn.split(".csv")[0]
+
+                if fn not in processedfiles:
+                    print("Loading add file {}".format(fn))
+                    dfAdd = pd.read_csv(filename, header=None, names=['PK'])
+                    for __, row in dfAdd.iterrows():
+                        print("Attempt to add {}".format(row['PK']))
+                        tmpdf = df[ df[pkfield] == row['PK']]
+                        if tmpdf.empty:
+                            print("Add failed: Could not find an entry with PK {}".format(row['PK']))
+                        else:
+                            labels = tmpdf[multi_label_field].get_values()[0].split(',')
+                            if label not in labels:
+                                labels.append(label)
+                                df.loc[ df[pkfield] == row['PK'], multi_label_field] = ",".join(labels)
+
 
     print("<<<Real size of inputfile after modifying {}".format(df.shape[0]))
 
