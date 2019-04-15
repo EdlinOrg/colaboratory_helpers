@@ -3,6 +3,8 @@ from ctypes import cast, py_object
 from google.colab import output
 
 """
+DEPRECATED: use uicheckboxmulticlass.py
+
 This one is using the label of the checkbox instead of idx.
 
 Note: we use the label exactly as it is, no modifying with removing spaces/special characters etc
