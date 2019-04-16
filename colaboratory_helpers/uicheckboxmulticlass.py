@@ -116,7 +116,7 @@ class Uicheckboxmulti():
     def triggerHTMLCode(self):
         return self.triggerItCode('callback_letsdoit', "TRIGGER IT!")
 
-    def allCheckboxes(self, pk, preselected=None):
+    def allCheckboxes(self, pk, preselected=None, removeboxes=True):
         """
         :param preselected: a list of labels that should be marked as selected
         """
@@ -128,8 +128,9 @@ class Uicheckboxmulti():
                 selected = lbl in preselected
             myhtml += self.checkboxCode(pk, self.moveClass + lbl, " &#9654; " + lbl, selected=selected)
 
-            #remove buttons for each label
-            myhtml += self.checkboxCode(pk, self.removeClass + lbl, " &#9003; Remove " + lbl)
+            if removeboxes:
+                #remove buttons for each label
+                myhtml += self.checkboxCode(pk, self.removeClass + lbl, " &#9003; Remove " + lbl)
 
             if not self.line_breaks:
                 #if we dont have line breaks, we add one so the checkboxes will appear in pairs: add / remove
