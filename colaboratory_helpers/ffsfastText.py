@@ -11,10 +11,24 @@ class MyFastTexter():
     https://github.com/facebookresearch/fastText/issues/478
     """
 
+    def __init__(self, multi_label=False, multi_treshold=0.05):
+        """
+        :param multilabel if we are dealing with a multilabel or not
+        :param multi_treshold everything above is considered to be of that label
+        """
+        self.multi_label=multi_label
+        self.multi_treshold=multi_treshold
+
     def setDataFile(self, trainfile):
         self.trainfile = trainfile
 
     def trainer(self, modelfile, epochs=25, settings=None):
+
+        if self.multi_label:
+            loss="ova"
+        else:
+            loss="softmax"
+
         if settings is not None:
             lr = settings['lr']
             ngram = settings['ngram']
@@ -25,9 +39,15 @@ class MyFastTexter():
                                                         lr=lr,
                                                         wordNgrams=ngram,
                                                         minn=mn,
+                                                        loss=loss,
                                                         minCount=minCount)
         else:
-            self.classifier = fastText.train_supervised(input=self.trainfile, epoch=epochs, wordNgrams=3)
+            self.classifier = fastText.train_supervised(
+                input=self.trainfile,
+                epoch=epochs,
+                wordNgrams=3,
+                loss=loss
+                )
         self.saveModel(modelfile)
 
     def saveModel(self, modelfile):
@@ -59,16 +79,53 @@ class MyFastTexter():
         return lbl
 
     def predictscore(self, mystr):
-        label = self.classifier.predict(mystr.strip())
+        """
+        :return 
+            normal: tuple of label, score
+            for multi_label: tuple of list of labels, list of scores
+                it only returns the labels where the score is higher or equal to elf.multi_treshold
+        """
+        if self.multi_label:
+            k=-1
+        else:
+            k=1
 
-        #the bloody label contains __label__ for some reason, so we remove it
-        res = label[0][0].replace("__label__", '')
-        return (res, label[1][0])
+        label = self.classifier.predict(mystr.strip(), k=k)
+
+        if self.multi_label:
+            #print("Label {}".format(label[0]))
+            #print("Label {}".format(label[1]))
+            #print("Label 0 {}".format(label[0][0]))
+            #print("Label 1 {}".format(label[1][0]))
+            keeplbls=[]
+            keepscore=[]
+
+            if(len(label) != 1):
+                Exception("wrong length of multi label return: {}".format(len(label)))
+
+            idx=0
+            numentries = len(label[0])
+            while idx < numentries:
+                lbl = label[0][idx]
+                lbl = lbl.replace("__label__", '')
+                score = label[1][idx]
+                #print("lbl {}".format(lbl))
+                #print("score {}".format(score))
+                if score >= self.multi_treshold:
+                    keeplbls.append(lbl)
+                    keepscore.append(score)
+                else:
+                    break
+                idx += 1
+            return (keeplbls, keepscore)            
+        else:
+            #the bloody label contains __label__ for some reason, so we remove it
+            res = label[0][0].replace("__label__", '')
+            return (res, label[1][0])
 
     def predictArray(self, myarr):
         res=[]
         for entry in myarr:
-
             res.append(self.predict(entry))
         return res
 
@@ -110,6 +167,11 @@ class MyFastTexter():
 
         totaliterations = len(lrs) * len(ngrams) * len(minn) * len(minCounts)
 
+        if self.multi_label:
+            loss="ova"
+        else:
+            loss="softmax"
+
         print("Using {} epochs, total num of iterations {}".format(epochs, totaliterations))
         for lr in lrs:
             for ngram in ngrams:
@@ -129,7 +191,15 @@ class MyFastTexter():
 
                         print(" - - -  - - -  - - -  - - -  - - -  - - -  - - -  - - - ")
                         print("Iteration {}/{} Trying lr={} ngram={} mn={} minCount={}".format(iteration, totaliterations, lr, ngram, mn, minCount))
-                        self.classifier = fastText.train_supervised(input=self.trainfile, epoch=epochs, lr=lr, wordNgrams=ngram, minn=mn, minCount=minCount)
+                        self.classifier = fastText.train_supervised(
+                            input=self.trainfile,
+                            epoch=epochs,
+                            lr=lr,
+                            wordNgrams=ngram,
+                            minn=mn,
+                            minCount=minCount,
+                            loss=loss
+                            )
                         self.evaluateOnly()
                         if self.compareTrainResults():
                             bestsofar=[lr, ngram,mn]
@@ -183,17 +253,97 @@ class MyFastTexter():
             #print("Poslabels:")
             #print(poslabels)
 
-            tp += poslabels.count(label)
-            fn += len(poslabels) - poslabels.count(label)
+            if self.multi_label:
+                #for multilabel, poslabels will be a list of lists
 
-            #for all other labels, check for false positives
-            for otherlabel in self.prepdict.keys():
-                if otherlabel == label:
-                    continue
+                #For each list, if the label is contained, it is a TP
+                for l in poslabels:
+                    inlist = l.count(label) #this really can only be max 1
+                    if inlist > 1:
+                        Exception("more than one match")
 
-                olbl = self.predictArray(self.prepdict[otherlabel])
-                fp += olbl.count(label)
-                tn += len(olbl) - olbl.count(label)
+                    tp += inlist
+
+                    #The label was not in the list, so we say FN
+                    if 0 == inlist:
+                        fn += 1
+
+
+                #for all other items that hasnt got this label, check for FP, TN
+
+                #loop over all items, the items that does not have label as ground truth are the ones we process
+                for itemstr, labels in self.prepdictreverse.items(): 
+                    if labels.count(label) > 0:
+                        #already processed this one above
+                        continue
+
+                    otherpredarr = self.predictArray([itemstr])
+                    
+                    #we got a list of lists back (with just one entry)
+                    if len(otherpredarr) != 1:
+                        Exception("Got back wrong length {}".format(otherpredarr))
+
+                    if otherpredarr[0].count(label) > 0:
+                        #we got prediction for this label, even though we shouldnt: FP
+                        fp += 1
+                    else:
+                        #otherwise we are all good, its a TN
+                        tn += 1
+
+
+
+
+                """
+
+
+                #for all other labels, check for false positives
+                #if the other label is one of the other true labels for an item, just ignore it, we will calculate that in the loop above
+
+                #TODO: we should check for other labels we have for this item, those are ok so should not be FP
+                for otherlabel in self.prepdict.keys():
+                    if otherlabel == label:
+                        continue
+
+                    olbl = self.predictArray(self.prepdict[otherlabel])
+                    #olbl is a list of lists
+
+                    tmpothers=0
+                    tmpfp=0
+                    idx=0
+                    for l in olbl:
+                        #l is a list of labels that were predicted for entry idx
+
+                        truelabels = self.prepdictreverse[self.prepdict[label][idx]]
+
+                        if l.count(label) > 0 and truelabels.count(label > 0):
+                            # this one had the label predicted, and also has label in ground truth
+                            # just ignore, since we should have calculated that as TP already
+                            continue
+
+                        if l.count(label) > 0:
+                            #predicted this label, but shouldnt be, hence FP
+                            tmpfp += 1
+                        else:
+                            tn += 1
+
+                        idx += 1
+
+                    fp += tmpfp
+                    #we dont include the others in "tn"
+                    tn += len(olbl) - tmpfp - tmpothers
+                    """
+            else:
+                tp += poslabels.count(label)
+                fn += len(poslabels) - poslabels.count(label)
+
+                #for all other labels, check for false positives
+                for otherlabel in self.prepdict.keys():
+                    if otherlabel == label:
+                        continue
+
+                    olbl = self.predictArray(self.prepdict[otherlabel])
+                    fp += olbl.count(label)
+                    tn += len(olbl) - olbl.count(label)
 
             print("= " * 80)
             print("Stats for label {}".format(label))
@@ -210,9 +360,9 @@ class MyFastTexter():
         print("printStats")
         result = self.classifier.test(self.trainfile)
         print(result)
-#        print('P@1:', result.precision)
-#        print('R@1:', result.recall)
-#        print('Number of examples in training file:', result.nexamples)
+        #print('P@1:', result.precision)
+        #print('R@1:', result.recall)
+        #print('Number of examples in training file:', result.nexamples)
 
         print("- - - - ")
         print('Number of examples in our data after parsing training file: {}'.format((tp+fn+tn+fp)))
@@ -223,8 +373,12 @@ class MyFastTexter():
         print("FP: {}".format(fp))
 
         self.stat_acc = (tp + tn) / (tp + fn + tn + fp)
-        self.stat_prec = tp / (tp + fp)
-        self.stat_recall = tp / (tp + fn)
+        if tp == 0:
+            self.stat_prec = 0
+            self.stat_recall = 0
+        else:
+            self.stat_prec = tp / (tp + fp)
+            self.stat_recall = tp / (tp + fn)
 
         print("Accuracy {}".format(self.stat_acc))
         print("Precision {}".format(self.stat_prec))
@@ -239,23 +393,53 @@ class MyFastTexter():
         print("Load training file to generate dict {}".format(filename))
         fh = open(filename, "r")
 
+        # label -> list of strings which have that label as true prediction
         self.prepdict={}
+
+        # string -> list of labels as true prediction for that string
+        self.prepdictreverse={}
+
         for line in fh:
-            tt = line.split(' ', 1)
-            if(len(tt) != 2):
-                Exception("wrong split")
 
-            tt2 = tt[0].split("__label__")
-            lbl = tt2[1]
-            if lbl not in self.prepdict:
-                self.prepdict[lbl] = []
+            if self.multi_label:
+                #print("parsing as multi label") #should work for single label as well
+                labels = line.split("__label__")
 
-            self.prepdict[lbl].append(tt[1])
+                #The last entry should now be the the start of a label + content, the rest labels
+                last = labels.pop()
+                tt = last.split(' ', 1)
+
+                tmplabels=[]
+
+                for tmpl in labels:
+                    tmpl = tmpl.strip().strip(',').strip()
+                    if tmpl != '':
+                        tmplabels.append(tmpl)
+                        
+                #add the last one we extracted above
+                tmplabels.append(tt[0])
+
+                for lbl in tmplabels:
+                    if lbl not in self.prepdict:
+                        self.prepdict[lbl] = []
+                    self.prepdict[lbl].append(tt[1])
+
+                #reverse string -> list of labels
+                self.prepdictreverse[tt[1]] = tmplabels
+            else:
+                tt = line.split(' ', 1)
+                if(len(tt) != 2):
+                    Exception("wrong split")
+
+                tt2 = tt[0].split("__label__")
+                lbl = tt2[1]
+                if lbl not in self.prepdict:
+                    self.prepdict[lbl] = []
+
+                self.prepdict[lbl].append(tt[1])
 
         print("Num of entries in dict {}".format(len(self.prepdict.values())))
         print("Labels found in training file {}".format(self.prepdict.keys()))
-
-
 
 def compareModels(trainTestFile, mydir):
     """
@@ -292,3 +476,6 @@ def compareModels(trainTestFile, mydir):
     print("Accuracy {}".format(best_acc))
     print("Precision {}".format(best_prec))
     print("Recall {}".format(best_recall))
+
+
+#colaboratory_helpers.ffsfastText.MyFastTexter = MyFastTexter

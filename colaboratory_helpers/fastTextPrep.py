@@ -10,6 +10,7 @@ def createTrainingFile(inputdict,
                        filterset=None,
                        filterReverse=False,
                        cleanupCSVLabels=[],
+                       labelsfield=None,
                        pkfield=None,
                        pkoutfile=None,
                        pkoutfilelabel=None,
@@ -23,9 +24,10 @@ def createTrainingFile(inputdict,
     Loads the cvs file (with first line being header),
     only uses the headers specified in headersToUse
 
-    :param inputdict: filename -> label
+    :param inputdict: filename -> label. label is ignored if the param labelsfield is used
     :param headersToUse: array of strings
     :param filterset: only process these keys
+    :param labelsfield: which header to use for the label(s) (commaseparated string of labels)
     :param pkoutfile: File to save pk -> string info
     :param pkoutfilelabel: File to save pk -> label
     :param cbpreprocess: call back function to preprocess our data string
@@ -91,9 +93,6 @@ def createTrainingFile(inputdict,
     prepdict={}
 
     for cvsfilenameWitHeader, label in inputdict.items():
-
-        prepdict[label] = []
-
         print("Loading data to prepare from file %s\n" % cvsfilenameWitHeader)
         df = pd.read_csv(cvsfilenameWitHeader)
 
@@ -109,6 +108,11 @@ def createTrainingFile(inputdict,
 
         cnt = 1000000
         for index, row in df.iterrows():
+
+            if labelsfield is not None:
+                #Note: this can be a comma separated string
+                label = row[labelsfield]
+
 
             if pkfield is not None:
                 if row[pkfield] in itemsTaken:
@@ -163,9 +167,17 @@ def createTrainingFile(inputdict,
 
             if pkfield is not None:
                 pkdict[row[pkfield]] = mystr
+                #XXX: fine with this being a comma separated string?
                 pk2label[row[pkfield]] = label
 
-            mystr = '__label__' + label + ' ' + mystr
+            #Create the labels
+            tmplabel = '__label__' + label.replace(",", " , __label__")
+
+            mystr = tmplabel+ ' ' + mystr
+
+            if label not in prepdict:
+                #XXX: fine with this being a comma separated string?
+                prepdict[label] = []
 
             prepdict[label].append(mystr)
 
