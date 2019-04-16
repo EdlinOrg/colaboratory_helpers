@@ -164,7 +164,7 @@ class Analyze:
 
         if not self.multi_label:
             for pk, fastTextStr in self.pk2fastTextStr.items():
-                if not self.processOne(imgCb, pk, cnt, fastTextStr, grepTextUsed, grepText, grepTextNot, showWrongFor, treshold, plot):
+                if not self.processOne(imgCb, pk, cnt, fastTextStr, grepTextUsed, grepText, grepTextNot, showWrongFor, treshold, plot, interactive):
                     cnt += 1
                     stats['incorrect'] += 1
 
@@ -181,7 +181,7 @@ class Analyze:
             # MULTI LABEL, loop over the label
             for pk in self.label2pks[self.expected]:
                 fastTextStr = self.pk2fastTextStr[pk]
-                if not self.processOne(imgCb, pk, cnt, fastTextStr, grepTextUsed, grepText, grepTextNot, showWrongFor, treshold, plot):
+                if not self.processOne(imgCb, pk, cnt, fastTextStr, grepTextUsed, grepText, grepTextNot, showWrongFor, treshold, plot, interactive):
                     cnt += 1
                     stats['incorrect'] += 1
 
@@ -197,9 +197,19 @@ class Analyze:
 
         return (ret, stats)
 
-
-
-    def processOne(self, imgCb, pk, cnt, fastTextStr, grepTextUsed, grepText, grepTextNot, showWrongFor, treshold, plot):
+    def processOne(self,
+                    imgCb,
+                    pk,
+                    cnt,
+                    fastTextStr,
+                    grepTextUsed,
+                    grepText,
+                    grepTextNot,
+                    showWrongFor,
+                    treshold,
+                    plot,
+                    interactive
+                    ):
         visualPrediction='TODO'
         combinedPrediction='TODO'
         score='TODO'
@@ -255,19 +265,24 @@ class Analyze:
                         print("FastText: true label: '{}' - prediction: '{}' - score: {}".format(self.pk2label[pk], fastTextLabel, fastTextScore))
                     else:
                         print("FastText: expected label: '{}' - prediction: '{}' - score: {}".format(self.expected, fastTextLabel, fastTextScore))
-                        tmplabels = self.pk2label[pk].split(",")
-                        tmplabels.sort()
-                        print("FastText: true labels we defined: {}".format(tmplabels))
+                        if self.multi_label:
+                            tmplabels = self.pk2label[pk].split(",")
+                            tmplabels.sort()
+                            print("FastText: true labels we defined: {}".format(tmplabels))
             if self.cb is not None:
                 self.cb(pk)
 
             if interactive:
 
-                #pre-select the ones we have labelled now
-                display(HTML(self.uicheckboxes.allCheckboxes(pk, tmplabels)))
+                if self.multi_label:
+                    #pre-select the ones we have labelled now
+                    display(HTML(self.uicheckboxes.allCheckboxes(pk, tmplabels)))
 
-                #If we want to check the one ft selected
-                #display(HTML(self.uicheckboxes.allCheckboxes(pk, fastTextLabel)))
+                    #If we want to check the one ft selected
+                    #display(HTML(self.uicheckboxes.allCheckboxes(pk, fastTextLabel)))
+                else:
+                    display(HTML(self.uicheckboxes.allCheckboxes(pk, removeboxes=False)))
+
 
             return False
 
