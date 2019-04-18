@@ -103,6 +103,7 @@ class Analyze:
 
     def analyzePkl(self,
                    imgCb,
+                   textCb=None,
                    limit=100,
                    treshold=0.7,
                    showWrongFor=2,
@@ -164,7 +165,7 @@ class Analyze:
 
         if not self.multi_label:
             for pk, fastTextStr in self.pk2fastTextStr.items():
-                if not self.processOne(imgCb, pk, cnt, fastTextStr, grepTextUsed, grepText, grepTextNot, showWrongFor, treshold, plot, interactive):
+                if not self.processOne(imgCb, pk, cnt, fastTextStr, grepTextUsed, grepText, grepTextNot, showWrongFor, treshold, plot, interactive, textCb):
                     cnt += 1
                     stats['incorrect'] += 1
 
@@ -181,7 +182,7 @@ class Analyze:
             # MULTI LABEL, loop over the label
             for pk in self.label2pks[self.expected]:
                 fastTextStr = self.pk2fastTextStr[pk]
-                if not self.processOne(imgCb, pk, cnt, fastTextStr, grepTextUsed, grepText, grepTextNot, showWrongFor, treshold, plot, interactive):
+                if not self.processOne(imgCb, pk, cnt, fastTextStr, grepTextUsed, grepText, grepTextNot, showWrongFor, treshold, plot, interactive, textCb):
                     cnt += 1
                     stats['incorrect'] += 1
 
@@ -208,7 +209,8 @@ class Analyze:
                     showWrongFor,
                     treshold,
                     plot,
-                    interactive
+                    interactive,
+                    textCb=None
                     ):
         visualPrediction='TODO'
         combinedPrediction='TODO'
@@ -252,7 +254,10 @@ class Analyze:
                 plt.axis('off')
                 plt.show()
 
-            display(HTML("<blockquote>" + fastTextStr + "</blockquote"))
+            if textCb is not None:
+                display(HTML("<blockquote>" + textCb(fastTextStr) + "</blockquote"))
+            else:
+                display(HTML("<blockquote>" + fastTextStr + "</blockquote"))
 
             print("Cnt: {}  Pk: {}".format(cnt, pk))
             if self.useFastai:
