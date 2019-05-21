@@ -65,6 +65,44 @@ def drive_formatSharedLink(id):
 
 # ########### FILE UTILS ############
 
+def moveFilesAround(mydict, removefile, cbEachLine=None):
+    """
+    :param mydict
+    Take dict of the form
+    label -> {
+        'filenameToMovehere' -> full path to file
+        'mydir' -> full path to the directory where items of this label are placed
+    }
+
+    :param cbEachLine:
+        a callback function to be applied to each line in the text files
+        if supplied, we will process the text files first and create a tmp file that we use
+    """
+
+    for label, data in mydict.items():
+
+        for innerlabel, innerdata in mydict.items():
+            if label == innerlabel:
+                continue
+
+            tmpfile=data['filenameToMovehere']
+            if cbEachLine is not None:
+                tmpfile='tmpfile_moveFilesAround'
+                modifyTxtFile(data['filenameToMovehere'], tmpfile, cbEachLine)
+
+            #For each item in the file data['filenameToMovehere']
+            #move from innerdata['mydir'] to data['mydir']
+            moveFilesFromCSV(tmpfile, innerdata['mydir'], data['mydir'], ignoreErrors=True)
+
+            tmpfile=removefile
+            if cbEachLine is not None:
+                tmpfile='tmpfile_moveFilesAround'
+                modifyTxtFile(removefile, tmpfile, cbEachLine)
+
+            #remove items
+            removeFilesBasedOnCSVs([tmpfile], innerdata['mydir'])
+
+
 
 def dir_stats(mydir, prefix=" - - \n"):
     print(prefix + "{} {} files".format(mydir, len(os.listdir(mydir))))
@@ -113,7 +151,7 @@ def moveFilesFromCSV(filename, source, dest1, ignoreErrors=False):
     dir_stats(dest1, "Destination: ")
 
     cnt = 0
-    for index, row in dfToMove.iterrows():
+    for __, row in dfToMove.iterrows():
         f = row['Filename'].strip()
         # print(f)
 
@@ -133,6 +171,20 @@ def moveFilesFromCSV(filename, source, dest1, ignoreErrors=False):
     dir_stats(source, "Source: ")
     dir_stats(dest1, "Destination: ")
 
+def removeRandomFiles(numfilestokill, extension, directory):
+    """
+    Removes "numfilestokill" of the type "extension" from "directory"
+    Note: this is not randomly picking files to delete
+    """
+    for fn in os.listdir(directory):
+        filename = directory + '/' + fn
+        if os.path.isfile(filename) and fn.endswith(extension):
+            os.remove(filename)
+
+            numfilestokill -= 1
+
+            if numfilestokill < 1:
+                break
 
 
 def removeFiles(processdir, myset):
@@ -213,6 +265,18 @@ def fetch(url, filename):
 
 # ######### DATA MODIFICATION ########
 
+def modifyTxtFile(inputfile, outfile, cb):
+    """
+    Will modify a text file by applying a callback function to each line
+    :param inputfile file input
+    :param callback function apply to each line
+    """
+    pass
+    print("Loading inputfile {}".format(inputfile))
+    df = pd.read_csv(inputfile, header=None, names=['PK'])
+    df['PK'].apply(cb)
+    df.to_csv(outfile, index=False)
+
 def modifyCsv(inputfile,
               outputfile,
               pkfield,
@@ -259,7 +323,7 @@ def modifyCsv(inputfile,
 
             dfRemove = pd.read_csv(removefile, header=None, names=['PK'])
 
-            for index, row in dfRemove.iterrows():
+            for __, row in dfRemove.iterrows():
                 #print("Removing {} (if it is present)".format(row['PK']))
 
                 df = df[df[pkfield] != row['PK']]
@@ -416,7 +480,10 @@ def splitCSV(inputfile, outputdir, trainRatio=0.85):
 
 
 def splitDataset(inputdir, setDir, extension="", trainRatio=0.75, validRatio=0.15):
-
+    """
+    :param inputdir the directory with all the files
+    :param setDir the output directory where the sets should be created
+    """
     if (trainRatio + validRatio) > 1.0:
         print("Error: trainRatio + validRatio = {}".format(trainRatio + validRatio))
         return
@@ -584,18 +651,30 @@ def plt_show_img(filename):
     plt.axis('off')
 
 def plt_show_imgs_from_set(basedir, myset):
+    return plt_show_imgs_from_list(basedir, list(myset), trainvalidsubdir=True) 
+
+def plt_show_imgs_from_list(basedir, mylist, trainvalidsubdir=False):
     errs = []
     cnt = 1
-    tot=len(myset)
-    for f in myset:
-        filename = basedir + "/train/" + f
+    tot=len(mylist)
+    for f in mylist:
+        if trainvalidsubdir:
+            filename = basedir + "/train/" + f
+        else:
+            filename = basedir + f
 
         if not Path(filename).is_file():
-            filename = basedir + "/valid/" + f
-            if not Path(filename).is_file():
+            if trainvalidsubdir:
+                filename = basedir + "/valid/" + f
+                if not Path(filename).is_file():
+                    print("ERR: file doesnt exist {}".format(f))
+                    errs.append(f)
+                    continue
+            else:
                 print("ERR: file doesnt exist {}".format(f))
                 errs.append(f)
                 continue
+
 
         plt.figure()
         plt_show_img(filename)
