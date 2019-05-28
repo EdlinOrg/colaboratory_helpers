@@ -144,6 +144,9 @@ def moveFiles(source, dest1, limit=-1, extension='', wipeAndMakeDest=False):
 def moveFilesFromCSV(filename, source, dest1, ignoreErrors=False):
     dfToMove = pd.read_csv(filename, header=None, names=['Filename'])
 
+    #In case the filename are numerical, we make sure we convert to type string
+    dfToMove.Filename = dfToMove.Filename.astype(str)
+
     print(" * *  * *  * *  * *  * *  * *  * * ")
 
     print("Before:")
@@ -271,11 +274,10 @@ def modifyTxtFile(inputfile, outfile, cb):
     :param inputfile file input
     :param callback function apply to each line
     """
-    pass
-    print("Loading inputfile {}".format(inputfile))
+    print("modifyTxtFile: Loading inputfile {}".format(inputfile))
     df = pd.read_csv(inputfile, header=None, names=['PK'])
-    df['PK'].apply(cb)
-    df.to_csv(outfile, index=False)
+    df['PK'] = df['PK'].apply(cb)
+    df.to_csv(outfile, header=None, index=False)
 
 def modifyCsv(inputfile,
               outputfile,
