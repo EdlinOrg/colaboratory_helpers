@@ -8,6 +8,9 @@ import torch
 from torch.autograd import Variable
 
 class FaiCPU:
+    """
+    Fastai 0.7.0
+    """
 
     def __init__(self, modelfilename, verbose=False):
         self.model = torch.load(modelfilename, map_location='cpu').eval()

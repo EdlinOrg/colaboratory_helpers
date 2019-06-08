@@ -10,8 +10,15 @@ import pandas as pd
 from IPython.display import HTML
 
 from colaboratory_helpers import colaboratory_helpers
-from colaboratory_helpers.fastai_pyt_cpu import FaiCPU
-from colaboratory_helpers.fastai_pyt_gpu import FaiGPU
+
+#fastai v.0.7.0
+#from colaboratory_helpers.fastai_pyt_cpu import FaiCPU
+#from colaboratory_helpers.fastai_pyt_gpu import FaiGPU
+
+#fastai v.1
+from colaboratory_helpers.fastai1_pyt_cpu import FaiCPU
+from colaboratory_helpers.fastai1_pyt_gpu import FaiGPU
+
 
 from colaboratory_helpers.ffsfastText import MyFastTexter
 #from ffsfastText import MyFastTexter
@@ -33,22 +40,20 @@ class Analyze:
                  multi_metadata=None,
                  multi_label_moversdir=None,
                  pk2fastTextStrFile=None,
-                 pk2label=None,
-                 uuid=None
+                 pk2label=None
                  ):
         """
-        :param expected:
-        :param dir:
+        :param expected: a string of the expected value, for fastai we cast boolean to string, so 'True' or 'False' are expected values
+        :param dir: (fastai) this is the dir if we loop over images in a dir
         :param moveLabels: a dict: label -> filename to append movers to
-        :param modelfile:
-        :param csvcprocessed:
-        :param cb:
-        :param gpu:
-        :param fastTextModel:
+        :param modelfile: (fastai) full path to a fastai model file
+        :param csvcprocessed: list of strings; files that contain pk, i.e. entries we already processed and will ignore
+        :param cb: general callback function that takes pk as argument, can do whatever you want
+        :param gpu: (fastai) if it shall be processed on cpu or gpu 
+        :param fastTextModel: (fasttext) the full path to the fastText model file
         :param multi_metadata: the full path to the csv file that contains meta data for a multi label item. The labels are assumed to be in a column named "label"
         :param multi_label_moversdir: the full path to the directory where to load/save the pk of the items that shall be added to a label
-        :param pk2fastTextStrFile: pk -> string in fastText format (without label)
-        :param uuid a string with some id to identify who is running the code, is used so several people can work at the same time
+        :param pk2fastTextStrFile: (fasttext) pk -> string in fastText format (without label)
         """
         self.useFastai=False
 
@@ -78,7 +83,7 @@ class Analyze:
             del self.moveLabels[expected]
 
         self.expected=expected # a string
-        self.dir = dir # this is the dir if we loop over images in a dir, we want to be able to loop over a set(?) as well though
+        self.dir = dir 
         self.cb = cb
 
         if csvcprocessed is not None:
@@ -101,7 +106,7 @@ class Analyze:
             self.ensembleX = []
             self.ensembleY = []
 
-    def analyzePkl(self,
+    def analyze(self,
                    imgCb,
                    textCb=None,
                    limit=100,
@@ -110,29 +115,36 @@ class Analyze:
                    grepText=None,
                    grepTextNot=None,
                    plot=True,
-                   interactive=True):
+                   interactive=True,
+                   extension='.jpg'
+                   ):
         """
         Loop over entries in a pkl and process each
         :param imgCb callback function that returns path to image based on pk
+        :param textCb callback function that takes the text string and returns a string (with html)
+        :param limit number of "wrong" result that shall be displayed
+        :param treshold score needs to be higher than this to be considered correctly labeled (if showWrongFor==11)
         :param showWrongFor:
-            1 = visual NOT IMPLEMENTED
+            1 = visual, display all that are not getting classied as 'expected'
+            11 = visually correct classified, but score < treshold
             2 = text, display all that are not getting classied as 'expected'
             20 = text, display all that gets classified as "expected", but are not suppose to be that
             3 = combined NOT IMPLEMENTED
-            4 = visually correct classified, but score < treshold NOT IMPLEMENTED
         :param grepText a list of string that shall trigger false positive. If this is defined, the fastText prediction is disabled
         :param grepTextNot a list of strings that should NOT be present to trigger false positive, only used combined with grepText
+        :param extension (fastai) the extension of the image files
         :return: (ret, stats) where ret is a list of processed PK and stats is some statistics
         """
 
-        if not showWrongFor in [2, 20]:
-            print("showWrongFor= {} IS NOT IMPLEMENTED!".format(showWrongFor))
-            return
+        if showWrongFor==1:
+            print("Fastai: Will show items that were not predicted as {}, although that is what we expected".format(self.expected))
+        if showWrongFor==11:
+            print("Fastai: Will show items correctly classified, but score is lower than {}".format(treshold))
 
         if showWrongFor == 2:
-            print("Processing pkl, fastText prediction only, display all that are not getting classied as 'expected'")
+            print("FastText: Processing pkl, fastText prediction only, display all that are not getting classied as 'expected'")
         elif showWrongFor == 20:
-            print("Processing pkl, fastText prediction, display all that gets classified as 'expected' but are not supposed to be that")
+            print("FastText: Processing pkl, fastText prediction, display all that gets classified as 'expected' but are not supposed to be that")
 
         grepTextUsed=False
 
@@ -163,9 +175,47 @@ class Analyze:
         ret=[]
         cnt = 0
 
-        if not self.multi_label:
-            for pk, fastTextStr in self.pk2fastTextStr.items():
-                if not self.processOne(imgCb, pk, cnt, fastTextStr, grepTextUsed, grepText, grepTextNot, showWrongFor, treshold, plot, interactive, textCb):
+        if self.useFastai:
+
+            numberprocessed = 0
+
+            #Loop over the files in a directory
+            if self.dir is None:
+                print("ERROR: No directory <dir> is defined")
+                return
+
+            print("Processing dir {}".format(self.dir))
+
+            files = os.listdir(self.dir)
+            print("Found {} files".format(len(files)))
+
+            for f in files:
+                if extension != '' and not f.endswith(extension):
+                    continue
+
+                if f in self.processedset:
+                    continue
+
+                numberprocessed += 1
+
+                if numberprocessed % 1000 == 0:
+                    print("Items processed {}".format(numberprocessed))
+
+                filename = self.dir + "/" + f
+
+                #take before ., and convert to int
+                tmpf = f.split(".")
+                #it might be an underscore in there as well
+                tmpf = tmpf[0].split("_")
+
+                pk = int(tmpf[0])
+
+
+                (visualPrediction, score) = self.fc.predictscore(filename)
+                #Cast the boolean to a string
+                visualPrediction = str(visualPrediction)
+
+                if not self.processOne(imgCb, pk, cnt, None, grepTextUsed, grepText, grepTextNot, showWrongFor, treshold, plot, interactive, visualPrediction=visualPrediction, visualScore=score):
                     cnt += 1
                     stats['incorrect'] += 1
 
@@ -178,23 +228,40 @@ class Analyze:
                         break
                 else:
                     stats['correct'] += 1
+
         else:
-            # MULTI LABEL, loop over the label
-            for pk in self.label2pks[self.expected]:
-                fastTextStr = self.pk2fastTextStr[pk]
-                if not self.processOne(imgCb, pk, cnt, fastTextStr, grepTextUsed, grepText, grepTextNot, showWrongFor, treshold, plot, interactive, textCb):
-                    cnt += 1
-                    stats['incorrect'] += 1
+            if not self.multi_label:
+                for pk, fastTextStr in self.pk2fastTextStr.items():
+                    if not self.processOne(imgCb, pk, cnt, fastTextStr, grepTextUsed, grepText, grepTextNot, showWrongFor, treshold, plot, interactive, textCb):
+                        cnt += 1
+                        stats['incorrect'] += 1
 
-                    print("  Correct: {} Incorrect: {}".format(stats['correct'], stats['incorrect']))
-                    display(HTML("<hr noshade>"))
+                        print("  Correct: {} Incorrect: {}".format(stats['correct'], stats['incorrect']))
+                        display(HTML("<hr noshade>"))
 
-                    ret.append(pk)
+                        ret.append(pk)
 
-                    if cnt >= limit:
-                        break
-                else:
-                    stats['correct'] += 1
+                        if cnt >= limit:
+                            break
+                    else:
+                        stats['correct'] += 1
+            else:
+                # MULTI LABEL, loop over the label
+                for pk in self.label2pks[self.expected]:
+                    fastTextStr = self.pk2fastTextStr[pk]
+                    if not self.processOne(imgCb, pk, cnt, fastTextStr, grepTextUsed, grepText, grepTextNot, showWrongFor, treshold, plot, interactive, textCb):
+                        cnt += 1
+                        stats['incorrect'] += 1
+
+                        print("  Correct: {} Incorrect: {}".format(stats['correct'], stats['incorrect']))
+                        display(HTML("<hr noshade>"))
+
+                        ret.append(pk)
+
+                        if cnt >= limit:
+                            break
+                    else:
+                        stats['correct'] += 1
 
         return (ret, stats)
 
@@ -210,11 +277,15 @@ class Analyze:
                     treshold,
                     plot,
                     interactive,
-                    textCb=None
+                    textCb=None,
+                    visualPrediction=None,
+                    visualScore=None
                     ):
-        visualPrediction='TODO'
+        """
+        :param visualPrediction (fastai) the predicted label 
+        :param visualScore (fastai) the predicted score
+        """
         combinedPrediction='TODO'
-        score='TODO'
 
         if grepText is not None:
             fastTextLabel = self.expected
@@ -232,17 +303,17 @@ class Analyze:
                         fastTextLabel = strToSearchFor
                         break
         else:
-            #multi label, returns all labels that got a score higher than the default treshold
-            (fastTextLabel, fastTextScore) = self.fastTextClassifier.predictscore(fastTextStr)
+            if not self.useFastai:
+                #multi label, returns all labels that got a score higher than the default treshold
+                (fastTextLabel, fastTextScore) = self.fastTextClassifier.predictscore(fastTextStr)
 
-        #print(fastTextLabel)
 
         if ((showWrongFor == 1 and visualPrediction != self.expected) or \
                 (showWrongFor == 2 and not self.multi_label and fastTextLabel != self.expected) or \
                 (showWrongFor == 2 and self.multi_label and fastTextLabel.count(self.expected) == 0) or \
                 (showWrongFor == 20 and fastTextLabel == self.expected) and self.pk2label[pk] != self.expected or \
                 (showWrongFor == 3 and combinedPrediction != self.expected) or \
-                (showWrongFor == 4 and visualPrediction == self.expected and score < treshold)
+                (showWrongFor == 11 and visualPrediction == self.expected and visualScore < treshold)
             ):
 
             if str(pk) in self.processedset:
@@ -254,14 +325,16 @@ class Analyze:
                 plt.axis('off')
                 plt.show()
 
-            if textCb is not None:
-                display(HTML("<blockquote>" + textCb(fastTextStr) + "</blockquote"))
-            else:
-                display(HTML("<blockquote>" + fastTextStr + "</blockquote"))
+            if fastTextStr is not None:
+                if textCb is not None:
+                    display(HTML("<blockquote>" + textCb(fastTextStr) + "</blockquote"))
+                else:
+                    display(HTML("<blockquote>" + fastTextStr + "</blockquote"))
 
             print("Cnt: {}  Pk: {}".format(cnt, pk))
             if self.useFastai:
-                print("Fastai: {} - {}".format(visualPrediction, score))
+                print("Fastai: {} - {}".format(visualPrediction, visualScore))
+
             if self.fastText:
                 if grepTextUsed:
                     print("grepText: Expected: {} text matched: {}".format(self.expected, fastTextLabel))
@@ -288,7 +361,6 @@ class Analyze:
                 else:
                     display(HTML(self.uicheckboxes.allCheckboxes(pk, removeboxes=False)))
 
-
             return False
 
         return True
@@ -296,7 +368,7 @@ class Analyze:
         """
     def analyze(self, start, num, treshold=0.7, upperlimit=-1, extension='.jpeg', plot=True, interactive=True, showWrongFor=1):
 
-        TODO: this is not finished
+        
         Loop over a directory
         showWrongFor: 1= visual, 2=text, 3=combined, 4=visualy correct classified, but score < treshold
         

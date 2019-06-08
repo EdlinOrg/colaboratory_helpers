@@ -8,6 +8,9 @@ import torch
 from torch.autograd import Variable
 
 class FaiGPU:
+    """
+    Fastai 0.7.0
+    """
 
     def __init__(self, modelfilename, verbose=False):
         self.model = torch.load(modelfilename).eval()
@@ -35,3 +38,5 @@ class FaiGPU:
             print(probs)
 
         return (idx == 1, probs[0][idx])
+
+#fastai_pyt_gpu.FaiGPU = FaiGPU

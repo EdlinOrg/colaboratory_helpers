@@ -1,0 +1,45 @@
+import ntpath
+
+import torch
+
+from fastai.basic_train import load_learner
+from fastai.vision.image import open_image
+
+defaults.device = torch.device('cpu')
+
+class FaiCPU:
+    """
+    For Fastai v1
+    TODO: this one is still using GPU
+    """
+    def __init__(self, fastaimodelpkl, verbose=False):
+        """
+        :param fastaimodelpkl - full path to the pkl file, e.g. "mystuff/fastaimodel.pkl"
+        """
+        dirname = ntpath.dirname(fastaimodelpkl)
+        filename = ntpath.basename(fastaimodelpkl)
+
+        
+        self.learn = load_learner(dirname, file=filename)
+        self.verbose=verbose
+
+    def predict(self, filename):
+        img = open_image(filename)
+        pred_class, pred_idx, outputs = self.learn.predict(img)
+        return pred_class
+
+    def predictscore(self, filename):
+        img = open_image(filename)
+        pred_class, pred_idx, outputs = self.learn.predict(img)
+
+        if self.verbose:
+            print("pred")
+            print(pred_class)
+            print("pred_idx")
+            print(pred_idx)
+            print(outputs)
+
+        return (pred_class.obj, outputs[pred_idx].item())
+
+
+#fastai1_pyt_gpu.FaiCPU = FaiCPU
