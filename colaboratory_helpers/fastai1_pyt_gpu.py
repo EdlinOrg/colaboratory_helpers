@@ -7,13 +7,19 @@ class FaiGPU:
     """
     For Fastai v1
     """
-    def __init__(self, fastaimodelpkl, verbose=False):
+    def __init__(self, fastaimodelpkl, fp16=False, verbose=False):
         """
         :param fastaimodelpkl - full path to the pkl file, e.g. "mystuff/fastaimodel.pkl"
+        :param fp16 - set it to use half precision
         """
         dirname = ntpath.dirname(fastaimodelpkl)
         filename = ntpath.basename(fastaimodelpkl)
-        self.learn = load_learner(dirname, file=filename)
+
+        if fp16:
+            self.learn = load_learner(dirname, file=filename).to_fp16()
+        else:
+            self.learn = load_learner(dirname, file=filename)
+            
         self.verbose=verbose
 
     def predict(self, filename):
