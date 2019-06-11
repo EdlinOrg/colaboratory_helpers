@@ -5,12 +5,13 @@ import torch
 from fastai.basic_train import load_learner
 from fastai.vision.image import open_image
 
-defaults.device = torch.device('cpu')
+# defaults.device = torch.device('cpu')
+import fastai
+fastai.torch_core.defaults.device = 'cpu'
 
 class FaiCPU:
     """
     For Fastai v1
-    TODO: this one is still using GPU
     """
     def __init__(self, fastaimodelpkl, verbose=False):
         """
