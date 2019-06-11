@@ -19,6 +19,9 @@ class MyFastTexter():
         self.multi_label=multi_label
         self.multi_treshold=multi_treshold
 
+        #Used when we want items to only to be classified as positive when its over a certain treshold
+        self.nolabel = "**no_label**"
+
     def setDataFile(self, trainfile):
         self.trainfile = trainfile
 
@@ -63,6 +66,7 @@ class MyFastTexter():
             self.classifier = fastText.load_model( modelfile)
 
     def predictprobs(self, mystr):
+        # DEPRECATED
         label = self.classifier.predict(mystr.strip(), k=2)
 
         #TODO: this one just gives back two, probably change to be the same as number of labels, and in order
@@ -74,8 +78,17 @@ class MyFastTexter():
         res[two] = label[1][1]
         return res
 
-    def predict(self, mystr):
-        (lbl, __) = self.predictscore(mystr)
+    def predict(self, mystr, treshold=None):
+        (lbl, thescore) = self.predictscore(mystr)
+
+        if treshold is not None:
+            #check if its a dict
+            if isinstance(treshold, dict):
+                if lbl in treshold and thescore < treshold[lbl]:
+                    return self.nolabel
+            else:
+                if thescore < treshold:
+                    return self.nolabel
         return lbl
 
     def predictscore(self, mystr):
@@ -83,7 +96,7 @@ class MyFastTexter():
         :return 
             normal: tuple of label, score
             for multi_label: tuple of list of labels, list of scores
-                it only returns the labels where the score is higher or equal to elf.multi_treshold
+                it only returns the labels where the score is higher or equal to self.multi_treshold
         """
         if self.multi_label:
             k=-1
@@ -123,10 +136,10 @@ class MyFastTexter():
             res = label[0][0].replace("__label__", '')
             return (res, label[1][0])
 
-    def predictArray(self, myarr):
+    def predictArray(self, myarr, treshold=None):
         res=[]
         for entry in myarr:
-            res.append(self.predict(entry))
+            res.append(self.predict(entry, treshold=treshold))
         return res
 
     def trainerSetBest(self, acc, prec, recall):
@@ -182,7 +195,7 @@ class MyFastTexter():
                         if ignoreUntilStart:
                             if startFrom['lr'] == lr and \
                                 startFrom['ngram'] == ngram and \
-                                startFrom['minn'] == mn and \
+                                startFrom['mn'] == mn and \
                                 startFrom['minCount'] == minCount:
                                 ignoreUntilStart=False
                             else:
@@ -217,9 +230,9 @@ class MyFastTexter():
                     return True
         return False
 
-    def evaluate(self):
+    def evaluate(self, treshold=None):
         self.createDictFromTrainfile()
-        self.evaluateOnly()
+        self.evaluateOnly(treshold=treshold)
 
     def evaluateOnlyOld(self):
 
@@ -234,8 +247,18 @@ class MyFastTexter():
 
         self.printStats(self.tp, self.fn, self.tn, self.fp)
 
-    def evaluateOnly(self):
+    def evaluateOnly(self, treshold=None):
+        """
+        :param treshold - for none multi label only: float or dict label -> float (to have different treshold for different labels)
+            if defined, only the labels that got higher than the treshold are considered positive, otherwise negative,
+            i.e. we give them the label self.nolabel
+        """
+
         print("evaluateOnly")
+
+        if treshold is not None:
+            print("Using treshold {}".format(treshold))
+
         self.tp = 0
         self.fn = 0
         self.fp = 0
@@ -248,7 +271,7 @@ class MyFastTexter():
             fp=0
             tn=0
 
-            poslabels = self.predictArray(self.prepdict[label])
+            poslabels = self.predictArray(self.prepdict[label], treshold=treshold)
 
             #print("Poslabels:")
             #print(poslabels)
@@ -341,7 +364,7 @@ class MyFastTexter():
                     if otherlabel == label:
                         continue
 
-                    olbl = self.predictArray(self.prepdict[otherlabel])
+                    olbl = self.predictArray(self.prepdict[otherlabel], treshold=treshold)
                     fp += olbl.count(label)
                     tn += len(olbl) - olbl.count(label)
 
@@ -383,7 +406,6 @@ class MyFastTexter():
         print("Accuracy {}".format(self.stat_acc))
         print("Precision {}".format(self.stat_prec))
         print("Recall {}".format(self.stat_recall))
-
 
     def createDictFromTrainfile(self):
         self.createDictFromFile(self.trainfile)
@@ -441,7 +463,7 @@ class MyFastTexter():
         print("Num of entries in dict {}".format(len(self.prepdict.values())))
         print("Labels found in training file {}".format(self.prepdict.keys()))
 
-def compareModels(trainTestFile, mydir):
+def compareModels(trainTestFile, mydir, treshold=None):
     """
     Loop over models in a directory and compare which one got the best stats
     :param trainTestFile: the file with data to evaluate upon
@@ -460,7 +482,7 @@ def compareModels(trainTestFile, mydir):
         mft = MyFastTexter()
         mft.setDataFile(trainTestFile)
         mft.loadModel( mydir + "/" + modelfile)
-        mft.evaluate()
+        mft.evaluate(treshold=treshold)
 
         if mft.stat_acc >= best_acc:
             if mft.stat_prec >= best_prec:
@@ -478,4 +500,5 @@ def compareModels(trainTestFile, mydir):
     print("Recall {}".format(best_recall))
 
 
-#colaboratory_helpers.ffsfastText.MyFastTexter = MyFastTexter
+#ffsfastText.MyFastTexter = MyFastTexter
+#ffsfastText.compareModels = compareModels
