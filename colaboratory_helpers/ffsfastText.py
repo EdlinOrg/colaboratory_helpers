@@ -1,6 +1,6 @@
 import os
 
-import fastText
+import fasttext
 
 class MyFastTexter():
     """
@@ -37,7 +37,7 @@ class MyFastTexter():
             ngram = settings['ngram']
             mn = settings['mn']
             minCount = settings['minCount']
-            self.classifier = fastText.train_supervised(input=self.trainfile,
+            self.classifier = fasttext.train_supervised(input=self.trainfile,
                                                         epoch=epochs,
                                                         lr=lr,
                                                         wordNgrams=ngram,
@@ -45,7 +45,7 @@ class MyFastTexter():
                                                         loss=loss,
                                                         minCount=minCount)
         else:
-            self.classifier = fastText.train_supervised(
+            self.classifier = fasttext.train_supervised(
                 input=self.trainfile,
                 epoch=epochs,
                 wordNgrams=3,
@@ -61,9 +61,9 @@ class MyFastTexter():
     def loadModel(self, modelfile, addExt=True):
         print("Loading model file {}".format(modelfile))
         if addExt:
-            self.classifier = fastText.load_model( modelfile + '.bin')
+            self.classifier = fasttext.load_model( modelfile + '.bin')
         else:
-            self.classifier = fastText.load_model( modelfile)
+            self.classifier = fasttext.load_model( modelfile)
 
     def predictprobs(self, mystr):
         # DEPRECATED
@@ -204,7 +204,7 @@ class MyFastTexter():
 
                         print(" - - -  - - -  - - -  - - -  - - -  - - -  - - -  - - - ")
                         print("Iteration {}/{} Trying lr={} ngram={} mn={} minCount={}".format(iteration, totaliterations, lr, ngram, mn, minCount))
-                        self.classifier = fastText.train_supervised(
+                        self.classifier = fasttext.train_supervised(
                             input=self.trainfile,
                             epoch=epochs,
                             lr=lr,
@@ -499,6 +499,6 @@ def compareModels(trainTestFile, mydir, treshold=None):
     print("Precision {}".format(best_prec))
     print("Recall {}".format(best_recall))
 
-
+#ffsfastText = type('test', (object,), {})()
 #ffsfastText.MyFastTexter = MyFastTexter
 #ffsfastText.compareModels = compareModels
