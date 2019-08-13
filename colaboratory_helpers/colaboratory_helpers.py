@@ -325,10 +325,15 @@ def modifyCsv(inputfile,
 
             dfRemove = pd.read_csv(removefile, header=None, names=['PK'])
 
+            print("Size of df before removal {}".format(df.size))
+            removecnt = 0
             for __, row in dfRemove.iterrows():
                 #print("Removing {} (if it is present)".format(row['PK']))
 
                 df = df[df[pkfield] != row['PK']]
+                removecnt += 1
+            print("Attempted to remove {} entries (not mean all/any of those existed".format(removecnt))
+            print("Size of df after removal {}".format(df.size))
 
     if killwords is not None:
         print("Will use killwords")
@@ -443,6 +448,9 @@ def modifyCsv(inputfile,
 
 
     print("<<<Real size of inputfile after modifying {}".format(df.shape[0]))
+
+    df.drop_duplicates(keep='first', inplace=True)
+    print("Size of df after removing duplicates {}".format(df.shape[0]))
 
     df.to_csv(outputfile, index=False)
 
